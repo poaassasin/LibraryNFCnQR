@@ -57,31 +57,11 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
 
-        // Cukup periksa apakah ada 'Tag' yang terdeteksi dari intent
-        val tag: Tag? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+        Toast.makeText(this, "NFC Tag Ditemukan!", Toast.LENGTH_SHORT).show()
+
+        lifecycleScope.launch {
+            dataRepository.processAndSaveNfcIntent(intent)
         }
-
-        if (tag != null) {
-            // JIKA SAMPAI SINI, ARTINYA SCAN BERHASIL!
-            Toast.makeText(this, "Scan Tag NFC Berhasil!", Toast.LENGTH_SHORT).show()
-
-            // Ambil data teknis yang pasti ada
-            val tagId = tag.id.joinToString(":") { "%02X".format(it) }
-            val tagType = tag.techList.firstOrNull() ?: "Unknown"
-
-            // Karena tidak ada konten publik, kita beri placeholder yang jelas
-            val contentPlaceholder = "E-Money Card (No NDEF Content)"
-
-            // Simpan bukti scan ke server
-            lifecycleScope.launch {
-                dataRepository.saveNfcData(tagId, contentPlaceholder, tagType)
-            }
-        }
-        // Tidak perlu blok 'else' karena kita tidak lagi bergantung pada konten
     }
 }
 

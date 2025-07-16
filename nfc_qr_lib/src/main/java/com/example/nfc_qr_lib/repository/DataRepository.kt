@@ -14,6 +14,11 @@ import com.example.nfc_qr_lib.network.QrDataPayload
 import com.example.nfc_qr_lib.network.SupabaseClient
 import com.example.nfc_qr_lib.worker.SyncWorker
 import java.util.concurrent.TimeUnit
+import android.content.Intent // Tambahkan import
+import android.nfc.NfcAdapter // Tambahkan import
+import android.nfc.Tag // Tambahkan import
+import android.os.Build // Tambahkan import
+import com.example.nfc_qr_lib.NfcReader // Tambahkan import
 
 class DataRepository(context: Context) {
 
@@ -21,13 +26,42 @@ class DataRepository(context: Context) {
     private val apiService = SupabaseClient.instance
     private val workManager = WorkManager.getInstance(context)
 
-    suspend fun saveNfcData(tagId: String, content: String, tagType: String) {
+    suspend fun processAndSaveNfcIntent(intent: Intent) {
+        val tag: Tag? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+        }
+
+        // Jika tidak ada tag, hentikan proses
+        if (tag == null) return
+
+        // Ambil info teknis yang pasti ada
+        val tagId = tag.id.joinToString(":") { "%02X".format(it) }
+        val tagType = tag.techList.firstOrNull() ?: "Unknown"
+
+        // Coba baca konten NDEF menggunakan NfcReader dari library kita
+        val nfcContent = NfcReader.processNfcIntent(intent)
+
+        // Tentukan konten yang akan disimpan
+        val finalContent = if (!nfcContent.isNullOrEmpty()) {
+            // Jika ada konten NDEF, gunakan itu
+            nfcContent
+        } else {
+            // Jika tidak ada, gunakan placeholder
+            "Proprietary Tag (No NDEF Content)"
+        }
+
+        // Buat payload untuk dikirim
         val nfcPayload = NfcDataPayload(
             tag_id = tagId,
-            content = content,
+            content = finalContent,
             timestamp = System.currentTimeMillis().toString(),
             tag_type = tagType
         )
+
+        // Logika Online-First/Offline-Fallback tetap sama
         try {
             val response = apiService.insertNfcData(
                 apiKey = SupabaseClient.SUPABASE_ANON_KEY,
